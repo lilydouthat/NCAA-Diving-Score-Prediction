@@ -49,8 +49,5 @@ Project Outcomes
 
 This project demonstrates how historical performance data can be leveraged to understand qualification trends and support evidence-based decision-making in collegiate athletics.
 
-Authors
 
-Lily Douthat
-Grace Koo
-Miami University Data Science Program
+Miami University Data Science and Statistics Program
