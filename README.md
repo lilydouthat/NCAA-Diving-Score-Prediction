@@ -1,4 +1,4 @@
-Predicting NCAA Diving Qualification Scores
+# Predicting NCAA Diving Qualification Scores
 
 Project Overview
 
