@@ -1,0 +1,378 @@
+---
+title: "NCAA Diving Data Analysis"
+author: "Grace Koo, Lily Douthat"
+date: "2026-04-07"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      messsage = FALSE,
+                      warning = FALSE)
+```
+
+```{r, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+```
+
+## Read in Data
+
+```{r}
+setwd("C:/Users/cyuni/OneDrive/Documents/spring 26/STA 475/ncaa_project/")
+```
+
+```{r}
+# data <- read.csv("C:\\Users\\douth\\Downloads\\womens_individual.csv")
+data <- read.csv("womens_individual.csv")
+head(data)
+```
+
+
+## Data Preprocessing 
+
+```{r}
+yearly_data_1m_prequal <- data %>%
+  group_by(Year) %>%
+  summarise(Avg_Score = mean(X1m_prequal, na.rm=TRUE))
+
+yearly_data_1m_prequal
+```
+
+```{r}
+yearly_data_3m_prequal <- data %>%
+  group_by(Year) %>%
+  summarise(Avg_Score = mean(X3m_prequal, na.rm=TRUE))
+
+yearly_data_3m_prequal
+```
+
+
+### Minimum Prequalification Score
+
+```{r}
+yearly_data_1m_prequal <- data %>%
+  group_by(Year) %>%
+  summarise(Min_Score = min(X1m_prequal, na.rm=TRUE))
+
+yearly_data_1m_prequal
+```
+
+
+```{r}
+yearly_data_3m_prequal <- data %>%
+  group_by(Year) %>%
+  summarise(Min_Score = min(X3m_prequal, na.rm=TRUE))
+
+yearly_data_3m_prequal
+```
+
+
+```{r}
+new_data <- data %>%
+  mutate(highest_prequal = pmax(X1m_prequal, X3m_prequal, na.rm=TRUE))
+
+```
+
+```{r}
+yearly_data_highest_prequal <- new_data %>%
+  group_by(Year) %>%
+  summarise(Min_Score = min(highest_prequal, na.rm=TRUE))
+
+head(yearly_data_highest_prequal)
+```
+
+
+
+We also explore the variability in the scoring throughout time for the highest prequalifiying score.
+
+```{r}
+yearly_sd <- new_data %>%
+  group_by(Year) %>%
+  summarise(sd_score = sd(highest_prequal, na.rm=TRUE))
+```
+
+
+To better understand what distinguishes qualifying athletes, we compare average highest prequalification scores between qualifiers and non-qualifiers over time.
+
+```{r}
+# separate qualified divers and non qualified divers
+qualified_prequal <- new_data %>%
+  filter(qualify == 1)
+
+nonqualified_prequal <- new_data %>%
+  filter(qualify == 0)
+```
+
+```{r}
+yearly_qualified_highest_prequal <- qualified_prequal %>%
+  group_by(Year) %>%
+  summarise(Min_Score = min(highest_prequal, na.rm=TRUE))
+```
+
+```{r}
+yearly_nonqualified_highest_prequal <- nonqualified_prequal %>%
+  group_by(Year) %>%
+  summarise(Min_Score = min(highest_prequal, na.rm=TRUE))
+```
+
+
+```{r}
+ggplot(new_data, aes(x = highest_prequal, fill = factor(qualify))) +
+  geom_density(alpha = 0.4) +
+  theme_bw()
+```
+
+When plotting the densities of the highest prequalification score of those who qualified and didn't qualify, we can see that there may be a potential cutoff around 230.
+
+
+
+## Exploring potential predictors
+
+```{r}
+ggplot(new_data, aes(x = class_rank, y = highest_prequal)) +
+  geom_boxplot() +
+  theme_bw()
+```
+
+```{r}
+new_data$class_rank <- factor(new_data$class_rank,
+                              levels = c("FR", "SO", "JR", "SR", "5th"))
+
+ggplot(new_data, aes(x = class_rank, fill = factor(qualify))) +
+  geom_bar(position = "fill") +
+  coord_flip() +
+  labs(
+    title = "Proportion of Qualified vs Non-Qualified by Class Rank",
+    x = "Class Rank",
+    y = "Proportion",
+    fill = "Qualification Status"
+  ) +
+  scale_fill_manual(
+    values = c("0" = "lightcoral", "1" = "steelblue"),
+    labels = c("0" = "Not Qualified", "1" = "Qualified")
+  ) +
+  theme_bw()
+```
+
+We can see that 5th years and seniors have higher proportion of qualification, suggesting that experience could contribute to whether they are able to qualify. We can see that freshman also have the lowest proportion of qualification. We also want to see if it would be worth it for 5th years to be grouped with seniors.
+
+```{r}
+new_data %>%
+  count(class_rank == "5th")
+```
+
+There are only 6 5th years in the entire dataset over 11 years, so it would probably be worth grouping seniors and 5th years together for our statistical analysis. Before we group them, let's check how different the distirbutions of the scores are.
+
+
+```{r}
+new_data %>%
+  filter(class_rank %in% c("SR", "5th")) %>%
+  group_by(class_rank) %>%
+  summarise(
+    n = n(),
+    qualify_rate = mean(qualify, na.rm = TRUE)
+  )
+```
+
+```{r}
+ggplot(
+  new_data %>% filter(class_rank %in% c("SR", "5th")),
+  aes(x = class_rank, y = highest_prequal)
+) +
+  geom_boxplot() +
+  labs(
+    title = "Prequal Score Distribution: Seniors vs 5th-Year",
+    x = "Class Rank",
+    y = "Highest Prequal Score"
+  ) +
+  theme_bw()
+```
+
+We do not detect any significant differences in the means of these classes, so we will go ahead and merge them.
+
+Thus, due to the extremely small sample size of 5th-year students (n = 6), estimates for this group are unreliable. Exploratory analysis indicates similar score distributions and qualification behavior compared to seniors. Therefore, 5th-year students are merged with seniors for modeling purposes to improve statistical stability.
+
+```{r}
+# merging 5th years to senior class rank
+new_data <- new_data %>%
+  mutate(
+    class_rank = recode(class_rank, "5th" = "SR")
+  )
+
+# verifying that 5th years are merged
+table(data$class_rank)
+table(new_data$class_rank)
+```
+
+
+```{r}
+team_summary <- new_data %>%
+  group_by(Team) %>%
+  summarise(
+    n = n(),
+    avg_score = mean(highest_prequal, na.rm = TRUE),
+    median_score = median(highest_prequal, na.rm = TRUE),
+    sd_score = sd(highest_prequal, na.rm = TRUE),
+    min_score = min(highest_prequal, na.rm = TRUE),
+    max_score = max(highest_prequal, na.rm = TRUE),
+    qualify_rate = mean(qualify),
+    qualify_count = sum(qualify)
+  ) %>%
+  arrange(desc(avg_score))
+
+#team_summary
+```
+
+While this project may be more focused on Team Clarion, we can see that the performance of each Team varies. Clarion is clearly a dominant program with all 38 divers from its program from 2011-2025 being able to qualify, so they appear to be a very consistent program. Some teams also show strong performance in having a high qualifying rate, but have a small sample size (ex. Team Wingate). If we wanted to predict whether a diver could qualify for any team (not just Clarion), this may be a helpful predictor, but maybe should be used with caution since performance across teams are influenced by the sample size and variability of the score.
+
+
+
+# International Diver Analysis
+
+```{r}
+intl_summary <- new_data %>%
+  group_by(international) %>%
+  summarise(
+    Min_Score = min(highest_prequal, na.rm = TRUE),
+    count = n()
+  )
+
+intl_summary
+```
+
+```{r}
+ggplot(new_data, aes(x = factor(international), y = highest_prequal)) +
+  geom_boxplot() +
+  labs(
+    title = "Score Distribution: International vs Non-International",
+    x = "International Diver (0 = No, 1 = Yes)",
+    y = "Highest Prequal Score"
+  ) +
+  theme_minimal()
+```
+
+The international group shows high variability across years, likely due to very small sample sizes, with some years even having 0 international qualifiers. As a result, year-to-year trends are not reliable for this group.
+
+```{r}
+t.test(highest_prequal ~ international, data = new_data)
+```
+
+### International Divers: Statistical Comparison with T test
+
+International divers have higher average scores (224.5621 vs. 248.1875), and this difference is statistically significant (p = 0.0005814). This suggests that using international status as a predictor variable in our model may prove useful. Because international perform significantly better on average, this may impact qualifying scores if we know the amount of international divers participating in competition.
+
+
+Our next steps include thinking of what kind of statistical analysis to proceed with. This analysis will essentially be a classification problem. We could think of the main response being binary, so whether the diver qualified or did not. Or, we could also think of the response being a likelihood of a diver qualifying, which would be a probability.
+
+We can run a logistic regression with possible predictors of qualifying being:
+ - highest prequalifying score
+ - class rank
+ - international divers
+ - Timeline of the data. We should only use more recent data points (ex. last five years vs using the entire dataset). We could also weight the more recent years higher compared to older year data.
+ 
+Other than logistic regression, we could also run other methods including:
+ - LDA
+ - KNN
+ - Random Forest
+ - Neural Network
+ 
+ 
+# Analysis
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(forcats)
+library(broom)
+```
+
+
+```{r}
+model_data <- new_data %>%
+  mutate(
+    # order the ranks
+    class_rank = factor(class_rank, levels = c("FR", "SO", "JR", "SR")),
+    # convert to binary for international 
+    international = factor(international, levels = c(0, 1), labels = c("No", "Yes"))
+  ) %>%
+  # remove all NAs
+  filter(!is.na(highest_prequal),
+         !is.na(qualify),
+         !is.na(class_rank))
+```
+
+
+```{r}
+# fit logistic regression with only prequal scores
+
+fit <- glm(
+  qualify ~ highest_prequal,
+  data= model_data,
+  family = binomial
+)
+
+summary(fit)
+```
+
+```{r}
+# add class as predictor
+fit2 <- glm(
+  qualify ~ highest_prequal + class_rank,
+  data= model_data,
+  family = binomial
+)
+
+summary(fit2)
+```
+
+
+```{r}
+# main effects and interaction with prequal and class
+fit3 <- glm(
+  qualify ~ highest_prequal * class_rank,
+  data = model_data,
+  family = binomial
+)
+
+summary(fit3)
+```
+
+
+```{r}
+score_grid <- expand.grid(
+  highest_prequal = seq(
+    floor(min(model_data$highest_prequal, na.rm = TRUE)),
+    ceiling(max(model_data$highest_prequal, na.rm = TRUE)),
+    by = 1
+  ),
+  class_rank = levels(model_data$class_rank)
+)
+
+# predicting for the logistic model iwth 
+score_grid$pred_prob <- predict(
+  fit2,
+  newdata = score_grid,
+  type = "response"
+)
+
+# plotting probability of qualifying threshold by class rank
+ggplot(model_data, aes(x = highest_prequal, y = qualify)) +
+  geom_jitter(height = 0.05, width = 0, alpha = 0.25) +
+  geom_line(
+    data = score_grid,
+    aes(x = highest_prequal, y = pred_prob, color = class_rank),
+    linewidth = 1.2
+  ) +
+  labs(
+    title = "Predicted Probability of Qualifying by Highest Prequal Score",
+    x = "Highest Prequal Score",
+    y = "Predicted Probability of Qualifying",
+    color = "Class Rank"
+  ) +
+  theme_bw()
+```
+
+
