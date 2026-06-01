@@ -1,5 +1,9 @@
 # Predicting NCAA Diving Qualification Scores
 
+View presentation slides here:
+https://docs.google.com/presentation/d/1zX9GcWGqNai72sN4jBwwHv06GZOlcLv7X5upcaNhq7g/edit?usp=drivesdk
+
+
 Project Overview
 
 This project analyzes NCAA women’s diving performance data to identify factors associated with qualification scores and develop predictive models for future competition performance.
